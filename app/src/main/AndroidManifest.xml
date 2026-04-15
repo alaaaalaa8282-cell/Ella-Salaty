@@ -66,6 +66,12 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- خدمة تشغيل الأذان -->
+        <service
+            android:name=".service.PrayerAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- مستلم التنبيهات -->
         <receiver
             android:name=".receiver.AzkarAlarmReceiver"
