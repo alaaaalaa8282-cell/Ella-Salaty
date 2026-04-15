@@ -24,22 +24,31 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.google.accompanist.permissions.*
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import com.mohamedabdelazeim.zekr.service.AzkarPlaybackService
+import com.mohamedabdelazeim.zekr.service.alarm.AzkarAlarmScheduler
 import com.mohamedabdelazeim.zekr.ui.azkar.AzkarScreen
 import com.mohamedabdelazeim.zekr.ui.compass.QiblaCompassScreen
 import com.mohamedabdelazeim.zekr.ui.prayer.PrayerTimesScreen
 import com.mohamedabdelazeim.zekr.ui.settings.SettingsScreen
+import com.mohamedabdelazeim.zekr.ui.settings.SettingsViewModel
 import com.mohamedabdelazeim.zekr.ui.theme.*
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var azkarAlarmScheduler: AzkarAlarmScheduler
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -49,7 +58,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // طلب صلاحية الإشعارات لأندرويد 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -58,28 +66,40 @@ class MainActivity : ComponentActivity() {
             SalaatiTheme {
                 val systemUiController = rememberSystemUiController()
                 val navController = rememberNavController()
+                val settingsViewModel: SettingsViewModel = hiltViewModel()
+                val azkarAudioEnabled by settingsViewModel.azkarAudioEnabled.collectAsState()
 
                 SideEffect {
-                    systemUiController.setStatusBarColor(
-                        color = Color.Transparent,
-                        darkIcons = false
-                    )
-                    systemUiController.setNavigationBarColor(
-                        color = Color.Black,
-                        darkIcons = false
-                    )
+                    systemUiController.setStatusBarColor(Color.Transparent, darkIcons = false)
+                    systemUiController.setNavigationBarColor(Color.Black, darkIcons = false)
                 }
 
                 Scaffold(
                     containerColor = Color.Transparent,
-                    bottomBar = { BottomNavigationBar(navController) }
+                    bottomBar = { BottomNavigationBar(navController) },
+                    floatingActionButton = {
+                        // زر تشغيل/إيقاف الأذكار
+                        AzkarAudioFab(
+                            isEnabled = azkarAudioEnabled,
+                            onToggle = { enabled ->
+                                settingsViewModel.setAzkarAudioEnabled(enabled)
+                                if (enabled) {
+                                    val interval = settingsViewModel.azkarInterval.value
+                                    azkarAlarmScheduler.scheduleAzkarAlarm(interval)
+                                } else {
+                                    azkarAlarmScheduler.cancelAzkarAlarm()
+                                    stopService(Intent(this@MainActivity, AzkarPlaybackService::class.java))
+                                }
+                            }
+                        )
+                    }
                 ) { paddingValues ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
                     ) {
-                        // خلفية الصورة (من mipmap)
+                        // خلفية الصورة
                         Image(
                             painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                             contentDescription = null,
@@ -87,7 +107,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        // طبقة شفافة داكنة لتحسين وضوح النص
+                        // طبقة داكنة
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -106,18 +126,10 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             startDestination = "prayer"
                         ) {
-                            composable("prayer") {
-                                PrayerTimesScreen()
-                            }
-                            composable("azkar") {
-                                AzkarScreen()
-                            }
-                            composable("compass") {
-                                QiblaCompassScreen()
-                            }
-                            composable("settings") {
-                                SettingsScreen()
-                            }
+                            composable("prayer") { PrayerTimesScreen() }
+                            composable("azkar") { AzkarScreen() }
+                            composable("compass") { QiblaCompassScreen() }
+                            composable("settings") { SettingsScreen() }
                         }
                     }
                 }
@@ -126,11 +138,28 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun AzkarAudioFab(
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    FloatingActionButton(
+        onClick = { onToggle(!isEnabled) },
+        containerColor = if (isEnabled) Gold else DarkGreen,
+        contentColor = if (isEnabled) Color.Black else Color.White,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Icon(
+            if (isEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+            contentDescription = if (isEnabled) "إيقاف الأذكار" else "تشغيل الأذكار",
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomNavigationBar(navController: androidx.navigation.NavController) {
-    val context = LocalContext.current
-    
     val items = listOf(
         NavigationItem("prayer", "المواقيت", Icons.Default.AccessTime),
         NavigationItem("azkar", "الأذكار", Icons.Default.Menu),
