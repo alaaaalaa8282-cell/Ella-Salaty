@@ -22,6 +22,7 @@
     <string name="evening_azkar">أذكار المساء</string>
     <string name="reset_counter">إعادة العدد</string>
     <string name="of">من</string>
+    <string name="done">تم</string>
     
     <!-- الإشعارات -->
     <string name="notification_channel_prayer">أوقات الصلاة</string>
@@ -44,4 +45,11 @@
     <string name="snooze">تأجيل</string>
     <string name="save">حفظ</string>
     <string name="cancel">إلغاء</string>
+    
+    <!-- رسائل -->
+    <string name="location_permission_required">الوصول إلى الموقع مطلوب لحساب مواقيت الصلاة بدقة</string>
+    <string name="grant_permission">منح الصلاحية</string>
+    <string name="loading">جاري التحميل...</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="next_prayer">الصلاة القادمة</string>
 </resources>
