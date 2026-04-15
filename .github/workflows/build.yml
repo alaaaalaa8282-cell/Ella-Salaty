@@ -1,0 +1,72 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 🔧 Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: 🔐 Generate Keystore
+        run: |
+          keytool -genkeypair \
+            -alias salaty \
+            -keyalg RSA -keysize 2048 \
+            -validity 9125 \
+            -keystore salaty.jks \
+            -storepass salaty123 \
+            -keypass salaty123 \
+            -dname "CN=صلاتي,O=محمد عبد العظيم الطويل,C=EG" \
+            -noprompt
+
+      - name: 🛠️ Build Release APK
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/salaty.jks \
+            -Pandroid.injected.signing.store.password=salaty123 \
+            -Pandroid.injected.signing.key.alias=salaty \
+            -Pandroid.injected.signing.key.password=salaty123
+
+      - name: 📦 Create Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "build-${{ github.run_number }}"
+          name: "صلاتي - محمد عبد العظيم الطويل - إصدار ${{ github.run_number }}"
+          body: |
+            ## 📱 تطبيق صلاتي - محمد عبد العظيم الطويل الإسلامي
+            
+            ### 🌙 المميزات:
+            - ✅ مواقيت صلاة دقيقة حسب الموقع
+            - ✅ أذان بأصوات متعددة لكل صلاة
+            - ✅ بوصلة القبلة الحيوية
+            - ✅ أذكار الصباح والمساء التفاعلية
+            - ✅ أذكار متكررة في الخلفية
+            - ✅ إشعارات تذكير بالصلاة والأذكار
+            - ✅ تحديث تلقائي يومي للمواقيت
+            
+            ### 📱 متطلبات التشغيل:
+            - أندرويد 10 فما فوق
+            
+            ### 🕌 نسألكم الدعاء لوالدي محمد عبد العظيم الطويل بالمغفرة والرحمة
+            
+            ---
+            *تم البناء تلقائياً بواسطة GitHub Actions*
+          files: app/build/outputs/apk/release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
