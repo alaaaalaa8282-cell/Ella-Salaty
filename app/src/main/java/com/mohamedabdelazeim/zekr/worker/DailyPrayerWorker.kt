@@ -4,6 +4,8 @@ import android.content.Context
 import android.location.Geocoder
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.batoulapps.adhan.*
 import com.batoulapps.adhan.data.DateComponents
@@ -12,12 +14,14 @@ import com.mohamedabdelazeim.zekr.data.local.PrayerTimesEntity
 import com.mohamedabdelazeim.zekr.data.repository.LocationRepository
 import com.mohamedabdelazeim.zekr.data.repository.SettingsRepository
 import com.mohamedabdelazeim.zekr.service.alarm.PrayerAlarmScheduler
+import com.mohamedabdelazeim.zekr.util.NotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 @HiltWorker
 class DailyPrayerWorker @AssistedInject constructor(
@@ -26,32 +30,47 @@ class DailyPrayerWorker @AssistedInject constructor(
     private val locationRepository: LocationRepository,
     private val settingsRepository: SettingsRepository,
     private val prayerTimesDao: PrayerTimesDao,
-    private val prayerAlarmScheduler: PrayerAlarmScheduler
+    private val prayerAlarmScheduler: PrayerAlarmScheduler,
+    private val notificationHelper: NotificationHelper
 ) : CoroutineWorker(context, params) {
 
     private val dateFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-    private val hijriDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ar"))
     private val gregorianDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("ar"))
 
     override suspend fun doWork(): Result {
-        return try {
-            val location = locationRepository.getCurrentLocation()
-            val locationName = getLocationName(location.latitude, location.longitude)
+        return withContext(Dispatchers.IO) {
+            try {
+                val location = locationRepository.getCurrentLocation()
+                val locationName = getLocationName(location.latitude, location.longitude)
 
-            locationRepository.saveLocation(location, locationName)
+                locationRepository.saveLocation(location, locationName)
 
-            val prayers = calculatePrayerTimes(location.latitude, location.longitude)
-            val hijriDate = getHijriDate()
-            val gregorianDate = gregorianDateFormat.format(Date())
+                val prayers = calculatePrayerTimes(location.latitude, location.longitude)
+                val hijriDate = getHijriDate()
+                val gregorianDate = gregorianDateFormat.format(Date())
 
-            savePrayerTimesToDatabase(prayers, hijriDate, gregorianDate)
+                savePrayerTimesToDatabase(prayers, hijriDate, gregorianDate)
 
-            prayerAlarmScheduler.scheduleAllPrayerAlarms(prayers)
+                // إلغاء التنبيهات القديمة وجدولة الجديدة
+                prayerAlarmScheduler.cancelAllPrayerAlarms()
+                
+                prayers.forEach { prayer ->
+                    prayerAlarmScheduler.schedulePrayerAlarm(
+                        PrayerAlarmScheduler.PrayerTimeData(prayer.name, prayer.time)
+                    )
+                }
 
-            Result.success()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Result.retry()
+                // تحديث الإشعار الدائم بمواقيت الصلاة
+                updateStickyNotification(prayers)
+
+                // جدولة تذكيرات "هل صليت؟" للصلوات
+                schedulePrayerReminders(prayers)
+
+                Result.success()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Result.retry()
+            }
         }
     }
 
@@ -66,12 +85,12 @@ class DailyPrayerWorker @AssistedInject constructor(
         val prayerTimes = PrayerTimes(coordinates, date, params)
 
         return listOf(
-            PrayerTimeData("الفجر", prayerTimes.fajr),
-            PrayerTimeData("الشروق", prayerTimes.sunrise),
-            PrayerTimeData("الظهر", prayerTimes.dhuhr),
-            PrayerTimeData("العصر", prayerTimes.asr),
-            PrayerTimeData("المغرب", prayerTimes.maghrib),
-            PrayerTimeData("العشاء", prayerTimes.isha)
+            PrayerTimeData("الفجر", dateFormat.format(prayerTimes.fajr)),
+            PrayerTimeData("الشروق", dateFormat.format(prayerTimes.sunrise)),
+            PrayerTimeData("الظهر", dateFormat.format(prayerTimes.dhuhr)),
+            PrayerTimeData("العصر", dateFormat.format(prayerTimes.asr)),
+            PrayerTimeData("المغرب", dateFormat.format(prayerTimes.maghrib)),
+            PrayerTimeData("العشاء", dateFormat.format(prayerTimes.isha))
         )
     }
 
@@ -118,20 +137,63 @@ class DailyPrayerWorker @AssistedInject constructor(
     ) {
         val entity = PrayerTimesEntity(
             date = System.currentTimeMillis(),
-            fajr = dateFormat.format(prayers[0].time),
-            sunrise = dateFormat.format(prayers[1].time),
-            dhuhr = dateFormat.format(prayers[2].time),
-            asr = dateFormat.format(prayers[3].time),
-            maghrib = dateFormat.format(prayers[4].time),
-            isha = dateFormat.format(prayers[5].time),
+            fajr = prayers[0].time,
+            sunrise = prayers[1].time,
+            dhuhr = prayers[2].time,
+            asr = prayers[3].time,
+            maghrib = prayers[4].time,
+            isha = prayers[5].time,
             hijriDate = hijriDate,
             gregorianDate = gregorianDate
         )
         prayerTimesDao.insertPrayerTimes(entity)
     }
 
+    private fun updateStickyNotification(prayers: List<PrayerTimeData>) {
+        val now = Date()
+        val currentTime = dateFormat.format(now)
+        
+        val prayerList = listOf(
+            "الفجر" to prayers[0].time,
+            "الظهر" to prayers[1].time,
+            "العصر" to prayers[2].time,
+            "المغرب" to prayers[3].time,
+            "العشاء" to prayers[4].time
+        )
+        
+        val nextPrayer = prayerList.firstOrNull { it.second > currentTime }
+            ?: prayerList.firstOrNull()?.copy(first = "${prayerList.first().first} (غداً)")
+        
+        val allTimes = prayerList.joinToString("\n") { "${it.first}: ${it.second}" }
+        
+        if (nextPrayer != null) {
+            val notification = notificationHelper.showStickyPrayerTimesNotification(
+                nextPrayer.first,
+                nextPrayer.second,
+                allTimes
+            )
+            notificationHelper.showNotification(NotificationHelper.NOTIFICATION_STICKY_TIMES, notification)
+        }
+    }
+
+    private fun schedulePrayerReminders(prayers: List<PrayerTimeData>) {
+        val prayerNames = listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء")
+        
+        prayerNames.forEach { prayerName ->
+            val reminderWork = OneTimeWorkRequestBuilder<PrayerReminderWorker>()
+                .setInitialDelay(30, TimeUnit.MINUTES)
+                .setInputData(
+                    workDataOf("prayer_name" to prayerName)
+                )
+                .addTag("prayer_reminder_$prayerName")
+                .build()
+            
+            WorkManager.getInstance(applicationContext).enqueue(reminderWork)
+        }
+    }
+
     data class PrayerTimeData(
         val name: String,
-        val time: Date
+        val time: String
     )
 }
