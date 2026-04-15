@@ -3,6 +3,7 @@ package com.mohamedabdelazeim.zekr.service
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -24,8 +25,19 @@ class AzkarPlaybackService : Service() {
     lateinit var settingsRepository: com.mohamedabdelazeim.zekr.data.repository.SettingsRepository
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val azkarList = mutableListOf<String>()
-    private var currentAzkarIndex = 0
+    private var mediaPlayer: MediaPlayer? = null
+    
+    // قائمة الأذكار مع ملفاتها الصوتية
+    private val azkarWithAudio = listOf(
+        AzkarAudio("سبحان الله", R.raw.subhanallah),
+        AzkarAudio("الحمد لله", R.raw.alhamdulillah),
+        AzkarAudio("الله أكبر", R.raw.allahuakbar),
+        AzkarAudio("لا إله إلا الله", R.raw.lailahaillallah),
+        AzkarAudio("سبحان الله وبحمده سبحان الله العظيم", R.raw.subhanallah_wabihamdihi),
+        AzkarAudio("لا حول ولا قوة إلا بالله", R.raw.lahawla),
+        AzkarAudio("أستغفر الله العظيم وأتوب إليه", R.raw.astaghfirullah),
+        AzkarAudio("اللهم صل على محمد وعلى آل محمد", R.raw.salawat)
+    )
     
     companion object {
         private const val NOTIFICATION_ID = 2002
@@ -35,10 +47,17 @@ class AzkarPlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        loadAzkar()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            "STOP" -> {
+                stopPlayback()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        }
+        
         startForeground(NOTIFICATION_ID, createNotification())
         
         serviceScope.launch {
@@ -93,47 +112,40 @@ class AzkarPlaybackService : Service() {
             .build()
     }
     
-    private fun loadAzkar() {
-        // تحميل الأذكار من الملف أو استخدام القائمة الافتراضية
-        azkarList.addAll(listOf(
-            "سبحان الله",
-            "الحمد لله",
-            "الله أكبر",
-            "لا إله إلا الله",
-            "سبحان الله وبحمده سبحان الله العظيم",
-            "لا حول ولا قوة إلا بالله",
-            "أستغفر الله العظيم وأتوب إليه",
-            "اللهم صل على محمد وعلى آل محمد"
-        ))
-    }
-    
     private suspend fun playRandomAzkar() {
-        if (azkarList.isEmpty()) return
+        if (azkarWithAudio.isEmpty()) return
         
         val random = Random()
-        currentAzkarIndex = random.nextInt(azkarList.size)
-        val azkar = azkarList[currentAzkarIndex]
+        val selectedAzkar = azkarWithAudio[random.nextInt(azkarWithAudio.size)]
         
-        // تشغيل الذكر باستخدام TextToSpeech
-        speakAzkar(azkar)
+        // استخدام AudioFocusManager لتشغيل الصوت
+        val success = audioFocusManager.requestAudioFocusAndPlay(selectedAzkar.audioResId) {
+            // عند انتهاء التشغيل، نوقف الخدمة
+            stopSelf()
+        }
         
-        // انتظار حتى ينتهي الصوت
-        delay(5000)
-        
-        // إيقاف الخدمة بعد التشغيل
-        stopSelf()
+        if (!success) {
+            // لو فشل التشغيل (مثلاً فيه مكالمة شغالة)، نوقف الخدمة
+            stopSelf()
+        }
     }
     
-    private fun speakAzkar(text: String) {
-        // هنا ممكن استخدام TextToSpeech أو MediaPlayer لتشغيل ملف صوتي
-        // للتطبيق الحالي، سنستخدم إشعار فقط
+    private fun stopPlayback() {
+        audioFocusManager.stopPlayback()
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
     
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
-        audioFocusManager.release()
+        stopPlayback()
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
+    
+    data class AzkarAudio(
+        val text: String,
+        val audioResId: Int
+    )
 }
