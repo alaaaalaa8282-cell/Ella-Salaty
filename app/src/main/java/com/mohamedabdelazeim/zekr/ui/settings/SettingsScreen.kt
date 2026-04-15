@@ -39,11 +39,18 @@ fun SettingsScreen(
     val azkarInterval by viewModel.azkarInterval.collectAsState()
     val manualOffsets by viewModel.manualOffsets.collectAsState()
     val selectedAdhanSounds by viewModel.selectedAdhanSounds.collectAsState()
+    
+    // الإعدادات الجديدة
+    val silentAdhan by viewModel.silentAdhan.collectAsState()
+    val prayerReminderEnabled by viewModel.prayerReminderEnabled.collectAsState()
+    val azkarReminderEnabled by viewModel.azkarReminderEnabled.collectAsState()
+    val azkarAudioEnabled by viewModel.azkarAudioEnabled.collectAsState()
 
     var showCalculationMethodDialog by remember { mutableStateOf(false) }
     var showAzkarIntervalDialog by remember { mutableStateOf(false) }
     var showManualAdjustDialog by remember { mutableStateOf(false) }
     var selectedPrayerForSound by remember { mutableStateOf<String?>(null) }
+    var showSilentAdhanDialog by remember { mutableStateOf(false) }
 
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -51,7 +58,6 @@ fun SettingsScreen(
         uri?.let {
             selectedPrayerForSound?.let { prayer ->
                 viewModel.setAdhanSound(prayer, it)
-                // حفظ الصلاحية الدائمة للوصول للملف
                 context.contentResolver.takePersistableUriPermission(
                     it,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -71,15 +77,11 @@ fun SettingsScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = DarkGreen.copy(alpha = 0.85f)
-                ),
+                colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.85f)),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -172,22 +174,58 @@ fun SettingsScreen(
             )
         }
 
-        // قسم أصوات الأذان
+        // قسم الأذان
         item {
-            SectionHeader(title = "أصوات الأذان")
+            SectionHeader(title = "إعدادات الأذان")
         }
 
+        item {
+            SettingsItem(
+                title = "الأذان الصامت",
+                subtitle = "اختيار الصلوات التي لا يصدر فيها صوت",
+                icon = Icons.Default.VolumeOff,
+                onClick = { showSilentAdhanDialog = true }
+            )
+        }
+
+        // أصوات الأذان لكل صلاة
         listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء").forEach { prayer ->
             item {
                 SoundSelectionItem(
                     prayerName = prayer,
                     selectedSound = selectedAdhanSounds[prayer],
+                    isSilent = silentAdhan[prayer] ?: false,
                     onClick = {
                         selectedPrayerForSound = prayer
                         audioPickerLauncher.launch("audio/*")
                     }
                 )
             }
+        }
+
+        // قسم التذكيرات
+        item {
+            SectionHeader(title = "التذكيرات")
+        }
+
+        item {
+            SwitchSettingItem(
+                title = "تذكير بالصلاة",
+                description = "إشعار بعد الصلاة: هل صليت؟",
+                icon = Icons.Default.Notifications,
+                checked = prayerReminderEnabled,
+                onCheckedChange = { viewModel.setPrayerReminderEnabled(it) }
+            )
+        }
+
+        item {
+            SwitchSettingItem(
+                title = "تذكير بالأذكار",
+                description = "إشعارات منبثقة بالأذكار",
+                icon = Icons.Default.Menu,
+                checked = azkarReminderEnabled,
+                onCheckedChange = { viewModel.setAzkarReminderEnabled(it) }
+            )
         }
 
         // قسم الأذكار
@@ -204,6 +242,16 @@ fun SettingsScreen(
             )
         }
 
+        item {
+            SwitchSettingItem(
+                title = "تشغيل صوت الأذكار",
+                description = "تشغيل صوت عند تكرار الأذكار",
+                icon = Icons.Default.VolumeUp,
+                checked = azkarAudioEnabled,
+                onCheckedChange = { viewModel.setAzkarAudioEnabled(it) }
+            )
+        }
+
         // معلومات التطبيق
         item {
             SectionHeader(title = "معلومات")
@@ -212,15 +260,11 @@ fun SettingsScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = DarkGreen.copy(alpha = 0.5f)
-                ),
+                colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -238,17 +282,49 @@ fun SettingsScreen(
         }
     }
 
+    // حوار الأذان الصامت
+    if (showSilentAdhanDialog) {
+        AlertDialog(
+            onDismissRequest = { showSilentAdhanDialog = false },
+            title = { Text("الأذان الصامت", color = Gold, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء").forEach { prayer ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.toggleSilentAdhan(prayer) }
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = prayer, color = Color.White, fontSize = 16.sp)
+                            Switch(
+                                checked = silentAdhan[prayer] ?: false,
+                                onCheckedChange = { viewModel.toggleSilentAdhan(prayer) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Gold,
+                                    checkedTrackColor = Gold.copy(alpha = 0.5f)
+                                )
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSilentAdhanDialog = false }) {
+                    Text("تم", color = Gold)
+                }
+            },
+            containerColor = DarkGreen
+        )
+    }
+
     // حوار اختيار طريقة الحساب
     if (showCalculationMethodDialog) {
         AlertDialog(
             onDismissRequest = { showCalculationMethodDialog = false },
-            title = {
-                Text(
-                    "طريقة الحساب",
-                    color = Gold,
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            title = { Text("طريقة الحساب", color = Gold, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     listOf(
@@ -257,7 +333,6 @@ fun SettingsScreen(
                         "Karachi" to "جامعة العلوم الإسلامية - كراتشي",
                         "UmmAlQura" to "أم القرى - مكة المكرمة",
                         "Dubai" to "دبي",
-                        "MoonsightingCommittee" to "لجنة رؤية الهلال",
                         "NorthAmerica" to "أمريكا الشمالية"
                     ).forEach { (value, label) ->
                         Row(
@@ -276,15 +351,10 @@ fun SettingsScreen(
                                     viewModel.setCalculationMethod(value)
                                     showCalculationMethodDialog = false
                                 },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Gold
-                                )
+                                colors = RadioButtonDefaults.colors(selectedColor = Gold)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = label,
-                                color = Color.White
-                            )
+                            Text(text = label, color = Color.White)
                         }
                     }
                 }
@@ -302,13 +372,7 @@ fun SettingsScreen(
     if (showAzkarIntervalDialog) {
         AlertDialog(
             onDismissRequest = { showAzkarIntervalDialog = false },
-            title = {
-                Text(
-                    "فترة تكرار الأذكار",
-                    color = Gold,
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            title = { Text("فترة تكرار الأذكار", color = Gold, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     listOf(5, 10, 15, 20, 30, 60).forEach { interval ->
@@ -328,15 +392,10 @@ fun SettingsScreen(
                                     viewModel.setAzkarInterval(interval)
                                     showAzkarIntervalDialog = false
                                 },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Gold
-                                )
+                                colors = RadioButtonDefaults.colors(selectedColor = Gold)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "$interval دقيقة",
-                                color = Color.White
-                            )
+                            Text(text = "$interval دقيقة", color = Color.White)
                         }
                     }
                 }
@@ -354,39 +413,19 @@ fun SettingsScreen(
     if (showManualAdjustDialog) {
         AlertDialog(
             onDismissRequest = { showManualAdjustDialog = false },
-            title = {
-                Text(
-                    "التعديل اليدوي (بالدقائق)",
-                    color = Gold,
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            title = { Text("التعديل اليدوي (بالدقائق)", color = Gold, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     listOf("الفجر", "الظهر", "العصر", "المغرب", "العشاء").forEach { prayer ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = prayer,
-                                color = Color.White,
-                                fontSize = 16.sp
-                            )
+                            Text(text = prayer, color = Color.White, fontSize = 16.sp)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = {
-                                        viewModel.decrementOffset(prayer)
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Remove,
-                                        contentDescription = null,
-                                        tint = Gold
-                                    )
+                                IconButton(onClick = { viewModel.decrementOffset(prayer) }) {
+                                    Icon(Icons.Default.Remove, null, tint = Gold)
                                 }
                                 Text(
                                     text = "${manualOffsets[prayer] ?: 0}",
@@ -396,16 +435,8 @@ fun SettingsScreen(
                                     modifier = Modifier.width(40.dp),
                                     textAlign = TextAlign.Center
                                 )
-                                IconButton(
-                                    onClick = {
-                                        viewModel.incrementOffset(prayer)
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = null,
-                                        tint = Gold
-                                    )
+                                IconButton(onClick = { viewModel.incrementOffset(prayer) }) {
+                                    Icon(Icons.Default.Add, null, tint = Gold)
                                 }
                             }
                         }
@@ -441,45 +472,55 @@ fun SettingsItem(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = DarkGreen.copy(alpha = 0.7f)
-        ),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.7f)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = Gold,
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(icon, null, tint = Gold, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = subtitle,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 14.sp
-                )
+                Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(text = subtitle, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
             }
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
+            Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+fun SwitchSettingItem(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = Gold, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(text = description, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Gold,
+                    checkedTrackColor = Gold.copy(alpha = 0.5f)
+                )
             )
         }
     }
@@ -493,46 +534,21 @@ fun PermissionCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = DarkGreen.copy(alpha = 0.7f)
-        ),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.7f)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = Gold,
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(icon, null, tint = Gold, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = description,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 13.sp
-                )
+                Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(text = description, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
             }
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
+            Icon(Icons.Default.Settings, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -540,50 +556,48 @@ fun PermissionCard(
 @Composable
 fun SoundSelectionItem(
     prayerName: String,
-    selectedSound: Uri?,
+    selectedSound: String?,
+    isSilent: Boolean,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = DarkGreen.copy(alpha = 0.7f)
-        ),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = DarkGreen.copy(alpha = 0.7f)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = Gold,
+                if (isSilent) Icons.Default.VolumeOff else Icons.Default.MusicNote,
+                null,
+                tint = if (isSilent) Color.Gray else Gold,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "أذان $prayerName",
-                    color = Color.White,
+                    color = if (isSilent) Color.Gray else Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = if (selectedSound != null) "تم اختيار صوت مخصص" else "الصوت الافتراضي",
-                    color = if (selectedSound != null) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.7f),
+                    text = when {
+                        isSilent -> "صامت"
+                        selectedSound != null -> "تم اختيار صوت مخصص"
+                        else -> "الصوت الافتراضي"
+                    },
+                    color = when {
+                        isSilent -> Color.Gray
+                        selectedSound != null -> Color(0xFF4CAF50)
+                        else -> Color.White.copy(alpha = 0.7f)
+                    },
                     fontSize = 13.sp
                 )
             }
-            Icon(
-                Icons.Default.Edit,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
+            Icon(Icons.Default.Edit, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
     }
 }
