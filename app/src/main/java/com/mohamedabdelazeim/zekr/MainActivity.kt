@@ -1,14 +1,19 @@
 package com.mohamedabdelazeim.zekr
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -29,7 +35,7 @@ import com.mohamedabdelazeim.zekr.ui.azkar.AzkarScreen
 import com.mohamedabdelazeim.zekr.ui.compass.QiblaCompassScreen
 import com.mohamedabdelazeim.zekr.ui.prayer.PrayerTimesScreen
 import com.mohamedabdelazeim.zekr.ui.settings.SettingsScreen
-import com.mohamedabdelazeim.zekr.ui.theme.SalaatiTheme
+import com.mohamedabdelazeim.zekr.ui.theme.*
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -88,7 +94,7 @@ class MainActivity : ComponentActivity() {
                                 .background(
                                     Brush.verticalGradient(
                                         colors = listOf(
-                                            Color.Black.copy(alpha = 0.7f),
+                                            Color.Black.copy(alpha = 0.75f),
                                             Color.Black.copy(alpha = 0.5f)
                                         )
                                     )
@@ -120,8 +126,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomNavigationBar(navController: androidx.navigation.NavController) {
+    val context = LocalContext.current
+    
     val items = listOf(
         NavigationItem("prayer", "المواقيت", Icons.Default.AccessTime),
         NavigationItem("azkar", "الأذكار", Icons.Default.Menu),
@@ -133,13 +142,14 @@ fun BottomNavigationBar(navController: androidx.navigation.NavController) {
     val currentRoute = navBackStackEntry?.destination?.route
 
     NavigationBar(
-        containerColor = Color.Black.copy(alpha = 0.8f),
-        contentColor = Color.White
+        containerColor = Color.Black.copy(alpha = 0.85f),
+        contentColor = Color.White,
+        tonalElevation = 0.dp
     ) {
         items.forEach { item ->
             NavigationBarItem(
                 icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) },
+                label = { Text(item.label, fontSize = 12.sp) },
                 selected = currentRoute == item.route,
                 onClick = {
                     navController.navigate(item.route) {
@@ -148,8 +158,8 @@ fun BottomNavigationBar(navController: androidx.navigation.NavController) {
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFFFFD700),
-                    selectedTextColor = Color(0xFFFFD700),
+                    selectedIconColor = Gold,
+                    selectedTextColor = Gold,
                     unselectedIconColor = Color.White.copy(alpha = 0.6f),
                     unselectedTextColor = Color.White.copy(alpha = 0.6f),
                     indicatorColor = Color.Transparent
