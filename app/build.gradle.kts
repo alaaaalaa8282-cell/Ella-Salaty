@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
     id("dagger.hilt.android.plugin")
     id("com.google.devtools.ksp")
@@ -103,13 +102,13 @@ dependencies {
     // Location
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Adhan Library (حساب مواقيت الصلاة)
-    implementation("com.batoulapps.adhan:adhan-kotlin:1.2.1")
+    // Adhan Library (حساب مواقيت الصلاة) - FIXED: استبدال المكتبة المعطلة
+    implementation("com.batoulapps.adhan:adhan:1.3.1")
 
     // Hijri Calendar (التاريخ الهجري)
     implementation("com.github.msarhan:ummalqura-calendar:2.0.2")
 
-    // Permissions (Easy Permissions)
+    // Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
     // System UI Controller
