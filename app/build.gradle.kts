@@ -1,7 +1,8 @@
 plugins {
     id("com.android.application")
-    id("kotlin-kapt")
-    id("dagger.hilt.android.plugin")
+    kotlin("android")
+    kotlin("kapt")
+    id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
 }
 
@@ -38,8 +39,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        jvmToolchain(17)
     }
 
     buildFeatures {
@@ -55,6 +56,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+kapt {
+    correctErrorTypes = true
 }
 
 dependencies {
@@ -102,7 +107,7 @@ dependencies {
     // Location
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Adhan Library (حساب مواقيت الصلاة) - FIXED: استبدال المكتبة المعطلة
+    // Adhan Library (حساب مواقيت الصلاة)
     implementation("com.batoulapps.adhan:adhan:1.3.1")
 
     // Hijri Calendar (التاريخ الهجري)
