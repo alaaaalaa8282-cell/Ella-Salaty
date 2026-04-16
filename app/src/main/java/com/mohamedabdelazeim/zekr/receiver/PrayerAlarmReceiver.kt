@@ -36,10 +36,11 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
             val isSilent = silentAdhan[prayerName] ?: false
 
             if (!isSilent) {
-                // تشغيل شاشة الأذان فل سكرين (مع صوت)
+                // تشغيل شاشة الأذان فل سكرين
                 val fullScreenIntent = Intent(context, AlarmFullScreenActivity::class.java).apply {
                     putExtra("prayer_name", prayerName)
                     putExtra("prayer_time", prayerTime)
+                    putExtra("use_tts", true)  // استخدام TextToSpeech
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
 
@@ -49,19 +50,12 @@ class PrayerAlarmReceiver : BroadcastReceiver() {
 
                 if (adhanUri != null) {
                     fullScreenIntent.putExtra("audio_uri", adhanUri)
-                } else {
-                    // الصوت الافتراضي
-                    val defaultAdhanRes = when (prayerName) {
-                        "الفجر" -> R.raw.adhan_fajr
-                        else -> R.raw.adhan_normal
-                    }
-                    fullScreenIntent.putExtra("audio_res_id", defaultAdhanRes)
                 }
 
                 context.startActivity(fullScreenIntent)
             }
 
-            // إرسال إشعار الأذان (حتى لو كان صامت)
+            // إرسال إشعار الأذان
             val notification = notificationHelper.showPrayerAlarmNotification(prayerName, prayerTime)
             notificationHelper.showNotification(
                 when (prayerName) {
