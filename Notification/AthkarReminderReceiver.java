@@ -1,0 +1,64 @@
+package com.alaaeltaweel.thikrallah.Notification;
+
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import androidx.core.app.NotificationCompat;
+import com.alaaeltaweel.thikrallah.MainActivity;
+import com.alaaeltaweel.thikrallah.R;
+
+public class AthkarReminderReceiver extends BroadcastReceiver {
+
+    public static final String EXTRA_ATHKAR_TYPE = "athkar_type";
+    public static final String CHANNEL_ID = "athkar_reminder_channel";
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String athkarType = intent.getStringExtra(EXTRA_ATHKAR_TYPE);
+
+        Intent openIntent = new Intent(context, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            context, athkarType.hashCode(), openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT
+                | PendingIntent.FLAG_IMMUTABLE);
+
+        NotificationManager manager = (NotificationManager)
+            context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "تذكير الأذكار",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            manager.createNotificationChannel(channel);
+        }
+
+        String title, body;
+        if ("morning".equals(athkarType)) {
+            title = "🌅 أذكار الصباح";
+            body  = "لا تنسَ أذكار الصباح - ابدأ يومك بذكر الله";
+        } else {
+            title = "🌙 أذكار المساء";
+            body  = "لا تنسَ أذكار المساء - اختم يومك بذكر الله";
+        }
+
+        NotificationCompat.Builder builder =
+            new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent);
+
+        manager.notify(athkarType.hashCode(), builder.build());
+    }
+}
